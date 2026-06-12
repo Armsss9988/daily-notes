@@ -9,5 +9,6 @@ contextBridge.exposeInMainWorld('api', {
   onThemeChanged: (cb) => ipcRenderer.on('theme:changed', (_, theme) => cb(theme)),
   getStartOnBoot: () => ipcRenderer.invoke('app:getStartOnBoot'),
   setStartOnBoot: (value) => ipcRenderer.invoke('app:setStartOnBoot', value),
-  generateReport: (noteText, date) => ipcRenderer.invoke('report:generate', { noteText, date }),
+  generateContent: (noteText) => ipcRenderer.invoke('report:generate-content', noteText),
+  createDraft: (content, date) => ipcRenderer.invoke('report:create-draft', { content, date }),
 });
