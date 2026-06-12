@@ -217,15 +217,19 @@ const GENERATOR = (() => {
   return path.join(__dirname, '..', '..', 'generate_report.py');
 })();
 
-ipcMain.handle('report:generate', async (_, { noteText, date }) => {
+ipcMain.handle('report:create-draft', async (_, { content, date }) => {
   const { execFile } = require('child_process');
+  const jsonStr = JSON.stringify(content);
   return new Promise((resolve, reject) => {
-    const child = execFile(PYTHON, [GENERATOR, noteText], {
-      encoding: 'utf-8', timeout: 300000
+    const child = execFile(PYTHON, [GENERATOR, '--json', date || ''], {
+      encoding: 'utf-8',
+      timeout: 300000,
     }, (err, stdout, stderr) => {
       if (err) return reject(new Error(stderr || err.message));
       resolve();
     });
+    child.stdin.write(jsonStr);
+    child.stdin.end();
   });
 });
 
