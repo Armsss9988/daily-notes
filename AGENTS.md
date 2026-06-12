@@ -12,9 +12,10 @@
 - `npm run build` — vite build + electron-builder (fails on this env due to winCodeSign symlink issue; use `electron-packager` as fallback)
 
 ## Architecture
-- **`electron/main.cjs`** — main process: window creation (frameless), tray, IPC handlers, data migration, auto-start (`app.setLoginItemSettings`)
+- **`electron/main.cjs`** — main process: window creation (frameless), tray, IPC handlers, data migration, auto-start (`app.setLoginItemSettings`); includes `report:generate-content` (calls NVIDIA API via https) and `report:create-draft` (passes JSON to Python via stdin)
 - **`electron/tray.cjs`** — system tray: show/hide, "Launch at startup" checkbox, Quit
-- **`electron/preload.cjs`** — contextBridge: exposes `window.api.*` (load/save data, theme, start-on-boot)
+- **`electron/preload.cjs`** — contextBridge: exposes `window.api.*` (load/save data, theme, start-on-boot, generateContent, createDraft)
+- **`src/components/GenerateReportModal.jsx`** — modal for reviewing/editing AI-generated report content before creating email draft
 - **`src/App.jsx`** — shell: Sidebar (48px overlay) + Toolbar popup + DailyTab/NotesTab, theme state, editor ref wiring
 - **`src/components/Sidebar.jsx`** — 48px left sidebar (emoji icons: 📅 Daily, 📄 Notes, 🖌 Format, ☀️/🌙 Theme), hotzone/Ctrl+\ toggle, slide transition
 - **`src/components/Toolbar.jsx`** — formatting toolbar with `variant` prop: inline (flat row) or popup (section-grouped: Style, Heading, List, Align, Size)
