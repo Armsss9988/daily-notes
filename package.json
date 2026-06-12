@@ -1,0 +1,46 @@
+{
+  "name": "daily-notes",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Daily Notes - Electron desktop app",
+  "main": "electron/main.cjs",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build && electron-builder",
+    "preview": "vite preview",
+    "electron:dev": "concurrently \"vite\" \"wait-on http-get://localhost:5173 && electron .\"",
+    "electron:build": "vite build && electron-builder --win",
+    "package": "vite build && set TMP=C:\\ep-tmp&& set TEMP=C:\\ep-tmp&& electron-packager . --platform=win32 --arch=x64 --out=release --overwrite --prune=true",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "@tiptap/core": "^2.6.0",
+    "@tiptap/extension-highlight": "^2.6.0",
+    "@tiptap/extension-text-align": "^2.6.0",
+    "@tiptap/extension-text-style": "^2.6.0",
+    "@tiptap/extension-underline": "^2.6.0",
+    "@tiptap/pm": "^2.6.0",
+    "@tiptap/react": "^2.6.0",
+    "@tiptap/starter-kit": "^2.6.0",
+    "lucide-react": "^0.400.0",
+    "react": "^18.3.0",
+    "react-dom": "^18.3.0",
+    "uuid": "^10.0.0"
+  },
+  "devDependencies": {
+    "@electron/packager": "^20.0.1",
+    "@vitejs/plugin-react": "^4.3.0",
+    "autoprefixer": "^10.4.20",
+    "concurrently": "^8.2.0",
+    "electron": "^28.3.0",
+    "electron-builder": "^24.13.0",
+    "electron-packager": "^17.1.2",
+    "postcss": "^8.4.40",
+    "tailwindcss": "^3.4.10",
+    "vite": "^5.4.0",
+    "vitest": "^2.0.0",
+    "wait-on": "^7.2.0"
+  },
+  "packageManager": "npm@11.16.0+sha512.03be172fc3b199c7a06433163e459be5b110a6983c1dd6305b7ac10f6b0fa12e1440755a8df6b1064ab2ccb789df0474919fb9c684e322dc57685ede21752ccb"
+}

@@ -1,0 +1,207 @@
+const { app, BrowserWindow, ipcMain, globalShortcut, nativeTheme } = require('electron');
+const path = require('path');
+const fs = require('fs');
+const { createTray } = require('./tray.cjs');
+
+const DATA_FILE = path.join(app.getPath('userData'), 'notes.json');
+const CONFIG_FILE = path.join(app.getPath('userData'), 'config.json');
+let mainWindow = null;
+
+function loadData() {
+  try {
+    if (fs.existsSync(DATA_FILE)) {
+      return JSON.parse(fs.readFileSync(DATA_FILE, 'utf-8'));
+    }
+  } catch (e) {}
+  return { daily_notes: {}, notes: [] };
+}
+
+function saveData(data) {
+  fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2), 'utf-8');
+}
+
+function migrateData(data) {
+  const dn = data.daily_notes || {};
+  for (const d of Object.keys(dn)) {
+    const val = dn[d];
+    if (Array.isArray(val)) {
+      if (val.length > 0) {
+        let best = null;
+        for (const n of val) {
+          const c = n.c || { text: '', fmts: [] };
+          if (c.text) best = c;
+        }
+        dn[d] = { c: best || val[val.length - 1].c || { text: '', fmts: [] } };
+      } else {
+        delete dn[d];
+      }
+    }
+  }
+  return data;
+}
+
+function loadConfig() {
+  try {
+    if (fs.existsSync(CONFIG_FILE)) {
+      return JSON.parse(fs.readFileSync(CONFIG_FILE, 'utf-8'));
+    }
+  } catch (e) {}
+  return { theme: 'dark', width: 640, height: 560 };
+}
+
+function saveConfig(config) {
+  fs.writeFileSync(CONFIG_FILE, JSON.stringify(config, null, 2), 'utf-8');
+}
+
+function createWindow() {
+  const config = loadConfig();
+  mainWindow = new BrowserWindow({
+    width: config.width,
+    height: config.height,
+    x: config.x,
+    y: config.y,
+    minWidth: 520,
+    minHeight: 440,
+    icon: path.join(__dirname, '..', 'public', 'icon.png'),
+    frame: false,
+    webPreferences: {
+      preload: path.join(__dirname, 'preload.cjs'),
+      contextIsolation: true,
+      nodeIntegration: false,
+    },
+    show: false,
+    alwaysOnTop: true,
+  });
+
+  if (process.env.NODE_ENV === 'development' || process.argv.includes('--dev')) {
+    mainWindow.loadURL('http://localhost:5173');
+  } else {
+    mainWindow.loadFile(path.join(__dirname, '..', 'app', 'index.html'));
+  }
+
+  mainWindow.once('ready-to-show', () => {
+    mainWindow.show();
+    nativeTheme.themeSource = config.theme === 'dark' ? 'dark' : 'light';
+  });
+
+  let saveTimer = null;
+  function saveBounds() {
+    const bounds = mainWindow.getBounds();
+    saveConfig({ ...loadConfig(), x: bounds.x, y: bounds.y, width: bounds.width, height: bounds.height });
+  }
+  function debouncedSaveBounds() {
+    if (saveTimer) clearTimeout(saveTimer);
+    saveTimer = setTimeout(saveBounds, 300);
+  }
+  mainWindow.on('resize', debouncedSaveBounds);
+  mainWindow.on('move', debouncedSaveBounds);
+
+  mainWindow.on('close', (e) => {
+    if (saveTimer) clearTimeout(saveTimer);
+    saveBounds();
+    if (!app.isQuitting) {
+      e.preventDefault();
+      hideWindow();
+    }
+  });
+
+  mainWindow.on('minimize', () => { mainWindow.setSkipTaskbar(true); });
+  mainWindow.on('restore', () => { mainWindow.setSkipTaskbar(false); });
+  mainWindow.on('closed', () => { mainWindow = null; });
+}
+
+ipcMain.handle('data:load', () => {
+  const data = loadData();
+  return migrateData(data);
+});
+
+ipcMain.handle('data:save', (_, data) => {
+  saveData(data);
+});
+
+ipcMain.handle('theme:get', () => {
+  return loadConfig().theme || 'dark';
+});
+
+ipcMain.handle('theme:set', (_, theme) => {
+  const config = loadConfig();
+  config.theme = theme;
+  saveConfig(config);
+  nativeTheme.themeSource = theme === 'dark' ? 'dark' : 'light';
+  if (mainWindow) mainWindow.webContents.send('theme:changed', theme);
+});
+
+ipcMain.handle('app:getStartOnBoot', () => {
+  return app.getLoginItemSettings().openAtLogin;
+});
+
+const PYTHON = 'C:\\Users\\reed.le\\AppData\\Local\\Programs\\Python\\Python312\\python.exe';
+const GENERATOR = (() => {
+  const exeDir = path.dirname(app.getPath('exe'));
+  const p = path.join(exeDir, 'generate_report.py');
+  if (fs.existsSync(p)) return p;
+  return path.join(__dirname, '..', '..', 'generate_report.py');
+})();
+
+ipcMain.handle('report:generate', async (_, { noteText, date }) => {
+  const { execFile } = require('child_process');
+  return new Promise((resolve, reject) => {
+    const child = execFile(PYTHON, [GENERATOR, noteText], {
+      encoding: 'utf-8', timeout: 300000
+    }, (err, stdout, stderr) => {
+      if (err) return reject(new Error(stderr || err.message));
+      resolve();
+    });
+  });
+});
+
+ipcMain.handle('app:setStartOnBoot', (_, value) => {
+  app.setLoginItemSettings({ openAtLogin: value });
+  const config = loadConfig();
+  config.startOnBoot = value;
+  saveConfig(config);
+});
+
+function hideWindow() {
+  if (!mainWindow) return;
+  const bounds = mainWindow.getBounds();
+  saveConfig({ ...loadConfig(), x: bounds.x, y: bounds.y, width: bounds.width, height: bounds.height });
+  mainWindow.setSkipTaskbar(true);
+  mainWindow.minimize();
+}
+
+function showWindow() {
+  if (!mainWindow) return;
+  mainWindow.setSkipTaskbar(false);
+  mainWindow.restore();
+  mainWindow.focus();
+}
+
+app.whenReady().then(() => {
+  app.isQuitting = false;
+  const config = loadConfig();
+  app.setLoginItemSettings({ openAtLogin: config.startOnBoot !== false });
+
+  createWindow();
+  createTray(mainWindow, showWindow, hideWindow);
+
+  globalShortcut.register('Alt+Z', () => {
+    if (mainWindow) {
+      if (mainWindow.isMinimized()) {
+        showWindow();
+      } else {
+        hideWindow();
+      }
+    }
+  });
+
+  app.on('activate', () => {
+    if (mainWindow) showWindow();
+  });
+});
+
+app.on('before-quit', () => { app.isQuitting = true; });
+
+app.on('window-all-closed', () => {
+  globalShortcut.unregisterAll();
+});

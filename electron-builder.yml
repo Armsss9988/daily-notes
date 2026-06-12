@@ -1,0 +1,15 @@
+appId: com.dailynotes.app
+productName: Daily Notes
+directories:
+  output: dist
+  buildResources: public
+files:
+  - dist/**/*
+  - electron/**/*.cjs
+  - package.json
+win:
+  target: nsis
+  icon: public/icon.png
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true

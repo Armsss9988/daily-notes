@@ -1,0 +1,12 @@
+node_modules/
+release/
+daily-notes-win32-x64/
+app/assets/
+dist/
+.superpowers/
+.DS_Store
+*.log
+*.asar
+build/
+
+
