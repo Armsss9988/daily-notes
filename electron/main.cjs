@@ -1,6 +1,7 @@
 const { app, BrowserWindow, ipcMain, globalShortcut, nativeTheme } = require('electron');
 const path = require('path');
 const fs = require('fs');
+const https = require('https');
 const { createTray } = require('./tray.cjs');
 
 const DATA_FILE = path.join(app.getPath('userData'), 'notes.json');
@@ -51,6 +52,79 @@ function loadConfig() {
 
 function saveConfig(config) {
   fs.writeFileSync(CONFIG_FILE, JSON.stringify(config, null, 2), 'utf-8');
+}
+
+const NVIDIA_MODEL = 'meta/llama-3.1-8b-instruct';
+const NVIDIA_TEMPERATURE = 0.1;
+const NVIDIA_MAX_TOKENS = 8192;
+const NVIDIA_SYSTEM_PROMPT =
+  'You are a helpful assistant. Extract learning items, questions, and gains from the daily notes. ' +
+  'Return ONLY raw JSON without markdown formatting or code blocks. ' +
+  'Use this exact structure:\n' +
+  '{"learning_items":[{"content":"...","progress":"..."}],"questions":"...","gains":["..."]}';
+
+function generateContentFromNvidia(noteText) {
+  const apiKey = process.env.NVIDIA_API_KEY;
+  if (!apiKey) return Promise.reject(new Error('NVIDIA_API_KEY not found in environment'));
+
+  const body = JSON.stringify({
+    model: NVIDIA_MODEL,
+    messages: [
+      { role: 'system', content: NVIDIA_SYSTEM_PROMPT },
+      { role: 'user', content: noteText },
+    ],
+    temperature: NVIDIA_TEMPERATURE,
+    max_tokens: NVIDIA_MAX_TOKENS,
+  });
+
+  return new Promise((resolve, reject) => {
+    const req = https.request(
+      {
+        hostname: 'integrate.api.nvidia.com',
+        path: '/v1/chat/completions',
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          'Content-Type': 'application/json',
+          'Content-Length': Buffer.byteLength(body),
+        },
+      },
+      (res) => {
+        let data = '';
+        res.on('data', (chunk) => (data += chunk));
+        res.on('end', () => {
+          clearTimeout(timeout);
+          if (res.statusCode < 200 || res.statusCode >= 300) {
+            return reject(new Error('NVIDIA API returned status ' + res.statusCode + ': ' + data));
+          }
+          try {
+            const json = JSON.parse(data);
+            const raw = json.choices?.[0]?.message?.content || '';
+            const cleaned = raw.replace(/^```(?:json)?\s*/gi, '').replace(/```\s*$/g, '').trim();
+            const parsed = JSON.parse(cleaned);
+            resolve({
+              learning_items: parsed.learning_items || [],
+              questions: parsed.questions || '',
+              gains: parsed.gains || [],
+            });
+          } catch (e) {
+            reject(new Error('Failed to parse NVIDIA response: ' + e.message + '\nRaw: ' + data));
+          }
+        });
+        res.on('error', (err) => {
+          clearTimeout(timeout);
+          reject(err);
+        });
+      }
+    );
+    const timeout = setTimeout(() => {
+      req.destroy();
+      reject(new Error('NVIDIA API request timed out after 30 seconds'));
+    }, 30000);
+    req.on('error', reject);
+    req.write(body);
+    req.end();
+  });
 }
 
 function createWindow() {
@@ -153,6 +227,10 @@ ipcMain.handle('report:generate', async (_, { noteText, date }) => {
       resolve();
     });
   });
+});
+
+ipcMain.handle('report:generate-content', async (_, noteText) => {
+  return generateContentFromNvidia(noteText);
 });
 
 ipcMain.handle('app:setStartOnBoot', (_, value) => {
