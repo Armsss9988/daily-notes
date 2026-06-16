@@ -60,6 +60,7 @@ export default function TipTapEditor({ content, onChange, editorRef }) {
 
   useEffect(() => {
     if (editor && editorRef) editorRef(editor);
+    return () => { if (editorRef) editorRef(null); };
   }, [editor, editorRef]);
 
   if (!editor) return null;
