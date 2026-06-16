@@ -1,20 +1,24 @@
 import React, { useState, useCallback } from 'react';
-import NavBar from './NavBar';
-import TipTapEditor from './TipTapEditor';
-import GenerateReportModal from './GenerateReportModal';
+import { useSelector, useDispatch } from 'react-redux';
+import { notesActions } from '../../../state/slices/notesSlice';
+import { selectDailyNote } from '../../../state/selectors/notesSelectors';
+import NavBar from '../../shared/NavBar';
+import TipTapEditor from '../../editor/TipTapEditor';
+import GenerateReportModal from '../report/GenerateReportModal';
 
-export default function DailyTab({ notesManager, editorRef }) {
+export default function DailyTab({ editorRef }) {
+  const dispatch = useDispatch();
   const today = new Date().toISOString().split('T')[0];
   const [cdate, setCdate] = useState(today);
   const [generating, setGenerating] = useState(false);
   const [modalVisible, setModalVisible] = useState(false);
   const [reportContent, setReportContent] = useState(null);
 
-  const note = notesManager.dailyNote(cdate);
+  const note = useSelector(selectDailyNote(cdate));
 
   const handleChange = useCallback((content) => {
-    notesManager.setDailyNote(cdate, content);
-  }, [cdate, notesManager]);
+    dispatch(notesActions.dailyNoteChanged({ date: cdate, note: content }));
+  }, [cdate, dispatch]);
 
   const goPrev = useCallback(() => {
     const d = new Date(cdate);
@@ -28,20 +32,13 @@ export default function DailyTab({ notesManager, editorRef }) {
     setCdate(d.toISOString().split('T')[0]);
   }, [cdate]);
 
-  const goToday = useCallback(() => {
-    setCdate(today);
-  }, [today]);
+  const goToday = useCallback(() => setCdate(today), [today]);
 
   const handleGenerate = useCallback(async () => {
+    const noteText = note?.c?.text?.trim() || '';
+    if (!noteText) { alert('No content to generate report from'); return; }
     setGenerating(true);
     try {
-      notesManager.saveNow();
-      const note = notesManager.dailyNote(cdate);
-      const noteText = note?.c?.text?.trim() || '';
-      if (!noteText) {
-        alert('No content to generate report from');
-        return;
-      }
       const content = await window.api.generateContent(noteText);
       setReportContent(content);
       setModalVisible(true);
@@ -50,15 +47,13 @@ export default function DailyTab({ notesManager, editorRef }) {
     } finally {
       setGenerating(false);
     }
-  }, [cdate, notesManager]);
+  }, [note]);
 
   const handleRegenerate = useCallback(async () => {
-    notesManager.saveNow();
-    const note = notesManager.dailyNote(cdate);
     const noteText = note?.c?.text?.trim() || '';
     const content = await window.api.generateContent(noteText);
     setReportContent(content);
-  }, [cdate, notesManager]);
+  }, [note]);
 
   const handleCreateDraft = useCallback(async (content) => {
     await window.api.createDraft(content, cdate);
@@ -69,30 +64,17 @@ export default function DailyTab({ notesManager, editorRef }) {
     <div className="flex flex-col min-h-0 flex-1">
       <NavBar date={cdate} onPrev={goPrev} onNext={goNext} onToday={goToday} />
       <div className="flex-1 min-h-0 px-4 pb-4 flex flex-col">
-        <TipTapEditor
-          key={cdate}
-          content={note || {}}
-          onChange={handleChange}
-          editorRef={editorRef}
-        />
+        <TipTapEditor key={cdate} content={note || {}} onChange={handleChange} editorRef={editorRef} />
         <div className="flex justify-end pt-2 gap-2">
-          <button
-            onClick={handleGenerate}
-            disabled={generating}
-            className="px-3 py-1.5 text-xs font-medium bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white transition-colors"
-          >
+          <button onClick={handleGenerate} disabled={generating}
+            className="px-3 py-1.5 text-xs font-medium bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white transition-colors">
             {generating ? 'Generating...' : 'Generate Report'}
           </button>
         </div>
       </div>
-      <GenerateReportModal
-        visible={modalVisible}
-        date={cdate}
-        content={reportContent}
-        onRegenerate={handleRegenerate}
-        onCreateDraft={handleCreateDraft}
-        onClose={() => setModalVisible(false)}
-      />
+      <GenerateReportModal visible={modalVisible} date={cdate} content={reportContent}
+        onRegenerate={handleRegenerate} onCreateDraft={handleCreateDraft}
+        onClose={() => setModalVisible(false)} />
     </div>
   );
 }

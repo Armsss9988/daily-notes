@@ -16,41 +16,20 @@ export default function GenerateReportModal({ visible, date, content, onRegenera
 
   const handleRegenerate = useCallback(async () => {
     setLoading(true);
-    try {
-      await onRegenerate();
-    } finally {
-      setLoading(false);
-    }
+    try { await onRegenerate(); } finally { setLoading(false); }
   }, [onRegenerate]);
 
   const handleCreateDraft = useCallback(async () => {
     setLoading(true);
-    try {
-      await onCreateDraft({ learning_items: items, questions, gains });
-    } finally {
-      setLoading(false);
-    }
+    try { await onCreateDraft({ learning_items: items, questions, gains }); } finally { setLoading(false); }
   }, [items, questions, gains, onCreateDraft]);
 
-  const updateItem = (idx, field, val) => {
-    setItems(prev => prev.map((item, i) => i === idx ? { ...item, [field]: val } : item));
-  };
-  const removeItem = (idx) => {
-    setItems(prev => prev.filter((_, i) => i !== idx));
-  };
-  const addItem = () => {
-    setItems(prev => [...prev, { content: '', progress: '' }]);
-  };
-
-  const updateGain = (idx, val) => {
-    setGains(prev => prev.map((g, i) => i === idx ? val : g));
-  };
-  const removeGain = (idx) => {
-    setGains(prev => prev.filter((_, i) => i !== idx));
-  };
-  const addGain = () => {
-    setGains(prev => [...prev, '']);
-  };
+  const updateItem = (idx, field, val) => setItems(prev => prev.map((item, i) => i === idx ? { ...item, [field]: val } : item));
+  const removeItem = (idx) => setItems(prev => prev.filter((_, i) => i !== idx));
+  const addItem = () => setItems(prev => [...prev, { content: '', progress: '' }]);
+  const updateGain = (idx, val) => setGains(prev => prev.map((g, i) => i === idx ? val : g));
+  const removeGain = (idx) => setGains(prev => prev.filter((_, i) => i !== idx));
+  const addGain = () => setGains(prev => [...prev, '']);
 
   useEffect(() => {
     const handler = (e) => { if (e.key === 'Escape') onClose(); };
@@ -67,7 +46,6 @@ export default function GenerateReportModal({ visible, date, content, onRegenera
           <h2 className="text-sm font-semibold text-gray-200">Generate Report - {date}</h2>
           <button onClick={onClose} className="text-gray-400 hover:text-white text-xl px-1 leading-none">&times;</button>
         </div>
-
         <div className="p-5 space-y-5">
           <div>
             <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Learning Items</h3>
@@ -84,13 +62,11 @@ export default function GenerateReportModal({ visible, date, content, onRegenera
             </div>
             <button onClick={addItem} className="mt-2 text-xs text-blue-400 hover:text-blue-300 transition-colors">+ Add Item</button>
           </div>
-
           <div>
             <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Questions</h3>
             <textarea className="w-full bg-gray-800 border border-gray-600 text-gray-200 text-xs p-2 h-20 resize-y rounded"
               value={questions} onChange={e => setQuestions(e.target.value)} placeholder="Questions..." />
           </div>
-
           <div>
             <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Gains</h3>
             <div className="space-y-2">
@@ -106,7 +82,6 @@ export default function GenerateReportModal({ visible, date, content, onRegenera
             <button onClick={addGain} className="mt-2 text-xs text-blue-400 hover:text-blue-300 transition-colors">+ Add Gain</button>
           </div>
         </div>
-
         <div className="flex justify-end gap-2 px-5 py-3 border-t border-gray-700">
           <button onClick={handleRegenerate} disabled={loading}
             className="px-3 py-1.5 text-xs text-gray-300 border border-gray-600 hover:bg-gray-700 disabled:opacity-40 transition-colors rounded">

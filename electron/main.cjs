@@ -4,6 +4,8 @@ const fs = require('fs');
 const https = require('https');
 const { createTray } = require('./tray.cjs');
 
+try { require('electron-reload')(__dirname); } catch (e) {}
+
 const DATA_FILE = path.join(app.getPath('userData'), 'notes.json');
 const CONFIG_FILE = path.join(app.getPath('userData'), 'config.json');
 let mainWindow = null;
@@ -269,6 +271,18 @@ function showWindow() {
   mainWindow.setSkipTaskbar(false);
   mainWindow.restore();
   mainWindow.focus();
+}
+
+const gotTheLock = app.requestSingleInstanceLock();
+if (!gotTheLock) {
+  app.quit();
+} else {
+  app.on('second-instance', () => {
+    if (mainWindow) {
+      if (mainWindow.isMinimized()) mainWindow.restore();
+      mainWindow.focus();
+    }
+  });
 }
 
 app.whenReady().then(() => {

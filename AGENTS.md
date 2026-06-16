@@ -11,16 +11,52 @@
 - `npm test` — vitest run (currently 1 file, 3 tests)
 - `npm run build` — vite build + electron-builder (fails on this env due to winCodeSign symlink issue; use `electron-packager` as fallback)
 
-## Architecture
-- **`electron/main.cjs`** — main process: window creation (frameless), tray, IPC handlers, data migration, auto-start (`app.setLoginItemSettings`); includes `report:generate-content` (calls NVIDIA API via https) and `report:create-draft` (passes JSON to Python via stdin)
-- **`electron/tray.cjs`** — system tray: show/hide, "Launch at startup" checkbox, Quit
-- **`electron/preload.cjs`** — contextBridge: exposes `window.api.*` (load/save data, theme, start-on-boot, generateContent, createDraft)
-- **`src/components/GenerateReportModal.jsx`** — modal for reviewing/editing AI-generated report content before creating email draft
-- **`src/App.jsx`** — shell: Sidebar (48px overlay) + Toolbar popup + DailyTab/NotesTab, theme state, editor ref wiring
-- **`src/components/Sidebar.jsx`** — 48px left sidebar (emoji icons: 📅 Daily, 📄 Notes, 🖌 Format, ☀️/🌙 Theme), hotzone/Ctrl+\ toggle, slide transition
-- **`src/components/Toolbar.jsx`** — formatting toolbar with `variant` prop: inline (flat row) or popup (section-grouped: Style, Heading, List, Align, Size)
-- **`src/utils/formatSchema.js`** — `textToDoc`/`docToTextAndFmts` for TipTap JSON ↔ plain text+fmts conversion
-- **`src/extensions/TextColor.js`**, `FontSize.js` — custom TipTap extensions (avoid `@tiptap/extension-color` due to peer dep version conflict)
+## Architecture (Layered)
+
+**Layers (top→bottom dependency):**
+```
+ui/         → React components (shell, features, shared)
+app/        → Use cases (coordinate domain + state)
+domain/     → Pure business logic (zero side effects, no imports)
+state/      → Redux: slices, selectors persist middleware
+data/       → Data access repositories
+platform/   → IPC bridge (window.api wrapper)
+```
+
+### Layer responsibilities
+
+- **`domain/`** — Pure functions (`note.js`, `dailyNote.js`, `theme.js`). No imports, no IPC, no env API. All side-effects (dates, UUIDs) injected as params.
+- **`app/`** — Use-case thunks (`notesUseCases.js`, `dailyUseCases.js`). Call domain functions + dispatch slice actions.
+- **`state/`** — Redux Toolkit (`slices/notesSlice.js`, `slices/uiSlice.js`, `middlewares/persistMiddleware.js`, `selectors/notesSelectors.js`, `selectors/uiSelectors.js`, `store.js`). Slices hold reducers only; middlewares persist via `data/repositories`.
+- **`data/repositories/`** — `notesRepo.js`, `configRepo.js`. Call `platform/ipcClient`.
+- **`platform/`** — `ipcClient.js`. Wraps `window.api.*` calls (only layer aware of IPC).
+- **`ui/`** — React components organized by feature:
+  - `ui/App.jsx` — shell, dispatches async thunks on mount
+  - `ui/sidebar/` — Sidebar
+  - `ui/editor/` — TipTapEditor, Toolbar
+  - `ui/features/daily/` — DailyTab
+  - `ui/features/notes/` — NotesTab, NoteList
+  - `ui/features/report/` — GenerateReportModal
+  - `ui/shared/` — NavBar, ConfirmDialog
+- **`extensions/`** — Custom TipTap extensions (TextColor, FontSize)
+- **`utils/`** — `formatSchema.js` (text↔doc conversion)
+
+### Data flow
+```
+UI click → app/usecase thunk → domain fn → dispatch slice action
+                                                    ↓
+                                          persistMiddleware (debounce 2s)
+                                                    ↓
+                                          data/repositories → platform/ipcClient
+                                                    ↓
+                                          Electron main process / filesystem
+```
+
+### Key details
+- `domain/note.js` — `createNote({ id, title, now })` returns plain object (no side effects)
+- `notesSlice` — actions: `noteCreated`, `noteUpdated`, `noteDeleted`, `noteRestored`, `dailyNoteChanged`, `noteSelected`
+- `persistMiddleware` — debounce 2s for `notes/*`, immediate for `noteSelected` (tab-switch safety), immediate for `ui/setTheme`/`ui/toggleTheme`
+- UI components dispatch direct slice actions for simple UI state (sidebar, activeTab); use `app/` thunks for business operations
 
 ## Data Model
 - Saved as `notes.json` in Electron userData
@@ -39,13 +75,11 @@
 ## Must Do After Every Change
 
 1. `npm test` — verify existing tests still pass
-2. `npm run build` — check for compile errors (vite build only)
-3. `npm run package` — rebuild the .exe (vite build + `electron-packager` to `release/daily-notes-win32-x64/daily-notes.exe`)
-4. Update shortcuts if path changed (Start Menu + Startup)
+2. `npm run dev` — quick vite build check (compile errors only, no electron-builder)
 
-## Build Workarounds
-- SentinelOne antivirus blocks `electron-packager` rename in `%TEMP%` — set `TMP`/`TEMP` env vars to `C:\ep-tmp` before packaging (already done in `npm run package` script)
-- Vite output dir: `app/`; packager output dir: `release/` (changed from `dist/` to avoid EPERM issues)
+## DO NOT Build/package the app
+- NEVER run `npm run build`, `npm run package`, or `electron-builder`
+- The user handles packaging themselves; we only test via `npm run electron:dev`
 
 ## Quirks
 - Node.js is NOT installed system-wide — use portable at `C:\tools\node-v22.14.0-win-x64`
