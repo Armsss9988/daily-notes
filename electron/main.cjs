@@ -59,6 +59,7 @@ const NVIDIA_TEMPERATURE = 0.1;
 const NVIDIA_MAX_TOKENS = 8192;
 const NVIDIA_SYSTEM_PROMPT =
   'You are a helpful assistant. Extract learning items, questions, and gains from the daily notes. ' +
+  'CRITICAL: Use keywords in notes to determine progress: "finish/done/complete" -> "Done", "learn/study/in progress" -> "In Progress", "plan/will/going to" -> "Not Started". ' +
   'Return ONLY raw JSON without markdown formatting or code blocks. ' +
   'Use this exact structure:\n' +
   '{"learning_items":[{"content":"...","progress":"..."}],"questions":"...","gains":["..."]}';
@@ -67,11 +68,16 @@ function generateContentFromNvidia(noteText) {
   const apiKey = process.env.NVIDIA_API_KEY;
   if (!apiKey) return Promise.reject(new Error('NVIDIA_API_KEY not found in environment'));
 
+  let safeNote = (noteText || '').replace(/!\[.*?\]\(.*?\)/g, '');
+  safeNote = safeNote.replace(/<img[^>]*>/gi, '');
+  safeNote = safeNote.replace(/\b\S*\.(png|jpg|jpeg|gif|webp|bmp|svg)\b/gi, '');
+  safeNote = safeNote.trim() || '(none)';
+
   const body = JSON.stringify({
     model: NVIDIA_MODEL,
     messages: [
       { role: 'system', content: NVIDIA_SYSTEM_PROMPT },
-      { role: 'user', content: noteText },
+      { role: 'user', content: safeNote },
     ],
     temperature: NVIDIA_TEMPERATURE,
     max_tokens: NVIDIA_MAX_TOKENS,
@@ -212,9 +218,15 @@ ipcMain.handle('app:getStartOnBoot', () => {
 const PYTHON = 'C:\\Users\\reed.le\\AppData\\Local\\Programs\\Python\\Python312\\python.exe';
 const GENERATOR = (() => {
   const exeDir = path.dirname(app.getPath('exe'));
-  const p = path.join(exeDir, 'generate_report.py');
-  if (fs.existsSync(p)) return p;
-  return path.join(__dirname, '..', '..', 'generate_report.py');
+  const candidates = [
+    path.join(exeDir, 'generate_report.py'),
+    path.join(__dirname, '..', '..', 'generate_report.py'),
+    path.join(__dirname, '..', 'generate_report.py'),
+  ];
+  for (const c of candidates) {
+    if (fs.existsSync(c)) return c;
+  }
+  return candidates[0];
 })();
 
 ipcMain.handle('report:create-draft', async (_, { content, date }) => {

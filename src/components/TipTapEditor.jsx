@@ -10,10 +10,11 @@ import { FontSize } from '../extensions/FontSize';
 import { textToDoc, docToTextAndFmts } from '../utils/formatSchema';
 
 function resolveContent(content) {
-  const c = content?.c || content || {};
-  if (c.doc) return c.doc;
-  if (c.c) return textToDoc(c.c.text, c.c.fmts);
-  return textToDoc(c.text, c.fmts);
+  if (!content) return { type: 'doc', content: [{ type: 'paragraph' }] };
+  if (content.doc) return content.doc;
+  const c = content.c;
+  if (c) return textToDoc(c.text, c.fmts);
+  return textToDoc(content.text, content.fmts);
 }
 
 export default function TipTapEditor({ content, onChange, editorRef }) {
