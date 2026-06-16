@@ -6,11 +6,10 @@
   "main": "electron/main.cjs",
   "scripts": {
     "dev": "vite",
-    "build": "vite build && electron-builder",
+    "build": "vite build",
     "preview": "vite preview",
     "electron:dev": "concurrently \"vite\" \"wait-on http-get://localhost:5173 && electron .\"",
-    "electron:build": "vite build && electron-builder --win",
-    "package": "vite build && set TMP=C:\\ep-tmp&& set TEMP=C:\\ep-tmp&& electron-packager . --platform=win32 --arch=x64 --out=release --overwrite --prune=true",
+    "package": "vite build && electron-builder --win portable --x64",
     "test": "vitest run",
     "test:watch": "vitest"
   },
@@ -43,6 +42,23 @@
     "vite": "^5.4.0",
     "vitest": "^2.0.0",
     "wait-on": "^7.2.0"
+  },
+  "build": {
+    "appId": "com.daily.notes",
+    "productName": "Daily Notes",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "electron/**/*",
+      "package.json",
+      "generate_report.py"
+    ],
+    "asar": true,
+    "win": {
+      "target": "portable"
+    }
   },
   "packageManager": "npm@11.16.0+sha512.03be172fc3b199c7a06433163e459be5b110a6983c1dd6305b7ac10f6b0fa12e1440755a8df6b1064ab2ccb789df0474919fb9c684e322dc57685ede21752ccb"
 }
